@@ -41,49 +41,45 @@ _SYMBOL_TO_CG = {
 }
 
 
-def _base(binance_sym: str) -> str:
-    return binance_sym[:-4] if binance_sym.endswith("USDT") else binance_sym
+COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets"
 
 
 async def get_top_binance_coins(n: int = 99) -> list[dict]:
-    """Binance USDT spot juftliklari, 24s savdo hajmi bo'yicha top N."""
-    url = f"{BINANCE_BASE_URL}/ticker/24hr"
+    """CoinGecko orqali top N coin (hajm bo'yicha, stablecoinsiz)."""
+    params = {
+        "vs_currency": "usd",
+        "order": "volume_desc",
+        "per_page": 150,
+        "page": 1,
+        "sparkline": False,
+        "price_change_percentage": "24h",
+    }
     async with httpx.AsyncClient() as client:
-        resp = await client.get(url, timeout=20)
+        resp = await client.get(COINGECKO_URL, params=params, timeout=20)
         resp.raise_for_status()
-        tickers = resp.json()
-
-    valid = []
-    for t in tickers:
-        if not t["symbol"].endswith("USDT"):
-            continue
-        base = _base(t["symbol"])
-        if (
-            base.isascii()
-            and base.isalpha()
-            and 2 <= len(base) <= 10
-            and base.lower() not in STABLECOIN_SYMBOLS
-        ):
-            valid.append(t)
-
-    valid.sort(key=lambda t: float(t["quoteVolume"]), reverse=True)
+        coins = resp.json()
 
     result = []
-    for t in valid[:n]:
-        base = _base(t["symbol"])
-        cg_id = _SYMBOL_TO_CG.get(base.upper(), base.lower())
+    for c in coins:
+        sym = (c.get("symbol") or "").lower()
+        if sym in STABLECOIN_SYMBOLS:
+            continue
+        if not sym.isascii() or not sym.isalpha():
+            continue
         result.append({
-            "id": cg_id,
-            "symbol": base.lower(),
-            "name": base,
-            "current_price": float(t["lastPrice"]),
-            "price_change_percentage_24h": float(t["priceChangePercent"]),
-            "total_volume": float(t["quoteVolume"]),
-            "high_24h": float(t["highPrice"]),
-            "low_24h": float(t["lowPrice"]),
-            "market_cap": 0,
+            "id": c["id"],
+            "symbol": sym,
+            "name": c.get("name", sym.upper()),
+            "current_price": c.get("current_price") or 0,
+            "price_change_percentage_24h": c.get("price_change_percentage_24h") or 0,
+            "total_volume": c.get("total_volume") or 0,
+            "high_24h": c.get("high_24h") or 0,
+            "low_24h": c.get("low_24h") or 0,
+            "market_cap": c.get("market_cap") or 0,
             "price_change_percentage_1h": None,
             "price_change_percentage_7d": None,
         })
+        if len(result) >= n:
+            break
 
     return result
