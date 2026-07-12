@@ -1,4 +1,6 @@
 import logging
+import threading
+from flask import Flask
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 )
@@ -14,10 +16,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Replit uxlab qolmasligi uchun mini web server
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def home():
+    return "YancharBot ishlayapti ✅"
+
+def run_flask():
+    flask_app.run(host="0.0.0.0", port=8080)
+
 
 def main():
     if not TELEGRAM_BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN .env faylida topilmadi!")
+
+    # Flask ni alohida threadda ishga tushirish
+    t = threading.Thread(target=run_flask, daemon=True)
+    t.start()
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
